@@ -1,11 +1,11 @@
 name: blocklist
 
 # Rebuilds the default blocklist weekly and publishes it at a stable URL:
-#   https://github.com/M-Abozaid/esp32-c3-adblock/releases/download/blocklist/blocklist.bin
+#   https://github.com/Apolo442/esp32-c3-adblock/releases/download/blocklist/blocklist.bin
 # Point a device's "Remote auto-update" at that URL and it stays current on its own.
 on:
   schedule:
-    - cron: "17 4 * * 1"   # Mondays 04:17 UTC
+    - cron: "17 4 * * *"   # daily 04:17 UTC
   workflow_dispatch:
 
 permissions:
@@ -19,8 +19,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Build default blocklist (fails if any source is unreachable)
-        run: python3 tools/build_blocklist.py blocklist.bin 2>&1 | tee build.log
+      - name: Build blocklist — StevenBlack + Hagezi Pro (fails if any source is unreachable)
+        run: |
+          python3 tools/build_blocklist.py blocklist.bin \
+            https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts \
+            https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt \
+            2>&1 | tee build.log
       - name: Sanity checks
         run: |
           size=$(stat -c%s blocklist.bin)
@@ -33,7 +37,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           entries=$(( $(stat -c%s blocklist.bin) / 5 ))
-          notes="Auto-built $(date -u +%F) — ${entries} entries (StevenBlack base + Hagezi Light).
+          notes="Auto-built $(date -u +%F) — ${entries} entries (StevenBlack base + Hagezi Pro).
 
           Set this as the device's Remote auto-update URL:
           https://github.com/${{ github.repository }}/releases/download/blocklist/blocklist.bin"
