@@ -50,6 +50,20 @@ def norm(d: str) -> str:
     d = d.strip().lower().lstrip('*').lstrip('.').rstrip('.')
     return d[4:] if d.startswith('www.') else d
 
+def covered_by_parent(domain: str, domains: set) -> bool:
+    """True if the firmware would already block `domain` through a listed parent.
+    Mirrors isBlocked() in src/main.cpp: it walks up the labels but stops before the bare TLD."""
+    p = domain
+    while True:
+        dot = p.find('.')
+        if dot < 0:
+            return False
+        p = p[dot + 1:]
+        if '.' not in p:
+            return False
+        if p in domains:
+            return True
+
 def read_source(src: str) -> str:
     if os.path.exists(src):
         return open(src, errors='ignore').read()
@@ -101,6 +115,11 @@ def main():
         print(f'allowlisted      : {before - len(domains):,} removed ({len(allow):,} @@ rules)', file=sys.stderr)
     if skipped:
         print(f'skipped rules    : {skipped:,} (adblock syntax that a DNS hash list cannot express)', file=sys.stderr)
+
+    # The device blocks every subdomain of a listed domain, so listing both only wastes flash.
+    redundant = {d for d in domains if covered_by_parent(d, domains)}
+    domains -= redundant
+    print(f'parent-covered   : {len(redundant):,} removed (no change in what gets blocked)', file=sys.stderr)
 
     hashes = sorted(fnv(d.encode()) for d in domains)
     collisions = len(hashes) - len(set(hashes))

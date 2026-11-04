@@ -19,12 +19,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Build blocklist — StevenBlack + Hagezi Pro (fails if any source is unreachable)
+      - name: Build blocklist — StevenBlack + Hagezi Pro, or Normal if Pro outgrows the flash
         run: |
-          python3 tools/build_blocklist.py blocklist.bin \
-            https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts \
-            https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro-onlydomains.txt \
-            2>&1 | tee build.log
+          build() {
+            python3 tools/build_blocklist.py blocklist.bin \
+              https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts \
+              "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/$1-onlydomains.txt" \
+              2>&1 | tee -a build.log
+          }
+          build pro
+          echo "LIST_NAME=Hagezi Pro" >> "$GITHUB_ENV"
+          if [ "$(stat -c%s blocklist.bin)" -ge 1300000 ]; then
+            echo "::warning::Hagezi Pro no longer fits the filesystem partition, falling back to Normal"
+            build multi
+            echo "LIST_NAME=Hagezi Normal" >> "$GITHUB_ENV"
+          fi
       - name: Sanity checks
         run: |
           size=$(stat -c%s blocklist.bin)
@@ -37,7 +46,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           entries=$(( $(stat -c%s blocklist.bin) / 5 ))
-          notes="Auto-built $(date -u +%F) — ${entries} entries (StevenBlack base + Hagezi Pro).
+          notes="Auto-built $(date -u +%F) — ${entries} entries (StevenBlack base + ${LIST_NAME}).
 
           Set this as the device's Remote auto-update URL:
           https://github.com/${{ github.repository }}/releases/download/blocklist/blocklist.bin"
